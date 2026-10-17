@@ -1,0 +1,109 @@
+-- Script Mejorado: Doble Salto + Auto Agarre + Velocidad
+-- Configuración fácil de editar
+
+local Players = game:GetService("Players")
+local UserInputService = game:GetService("UserInputService")
+local RunService = game:GetService("RunService")
+
+local player = Players.LocalPlayer
+local character = player.Character or player.CharacterAdded:Wait()
+local humanoid = character:WaitForChild("Humanoid")
+local rootPart = character:WaitForChild("HumanoidRootPart")
+
+-- ==================== CONFIGURACIÓN ====================
+local CONFIG = {
+    Speed = 50,              -- Velocidad de caminar/correr (default 16)
+    JumpPower = 60,          -- Fuerza del salto normal
+    DoubleJumpPower = 70,    -- Fuerza del doble salto
+    AutoGrabDistance = 15,   -- Distancia del auto agarre
+    AutoGrabEnabled = true,  -- Activar/desactivar auto agarre
+    DoubleJumpEnabled = true -- Activar/desactivar doble salto
+}
+-- =======================================================
+
+-- Variables internas
+local canDoubleJump = false
+local hasDoubleJumped = false
+local jumping = false
+
+-- Función para aplicar velocidad
+local function applySpeed()
+    if humanoid then
+        humanoid.WalkSpeed = CONFIG.Speed
+        humanoid.JumpPower = CONFIG.JumpPower
+    end
+end
+
+-- Doble Salto
+local function setupDoubleJump()
+    humanoid.StateChanged:Connect(function(_, newState)
+        if newState == Enum.HumanoidStateType.Jumping then
+            jumping = true
+            canDoubleJump = true
+            hasDoubleJumped = false
+        elseif newState == Enum.HumanoidStateType.Landed or newState == Enum.HumanoidStateType.Running then
+            jumping = false
+            canDoubleJump = false
+            hasDoubleJumped = false
+        elseif newState == Enum.HumanoidStateType.Freefall then
+            canDoubleJump = true
+        end
+    end)
+
+    UserInputService.JumpRequest:Connect(function()
+        if CONFIG.DoubleJumpEnabled and canDoubleJump and not hasDoubleJumped and jumping then
+            hasDoubleJumped = true
+            canDoubleJump = false
+            
+            -- Aplicar impulso del doble salto
+            local velocity = rootPart.AssemblyLinearVelocity
+            rootPart.AssemblyLinearVelocity = Vector3.new(velocity.X, CONFIG.DoubleJumpPower, velocity.Z)
+        end
+    end)
+end
+
+-- Auto Agarre (agarra automáticamente herramientas y objetos cercanos)
+local function setupAutoGrab()
+    RunService.Heartbeat:Connect(function()
+        if not CONFIG.AutoGrabEnabled or not character or not rootPart then return end
+        
+        for _, obj in pairs(workspace:GetDescendants()) do
+            if obj:IsA("Tool") and obj.Parent \~= character and obj.Parent \~= player.Backpack then
+                local handle = obj:FindFirstChild("Handle")
+                if handle then
+                    local distance = (rootPart.Position - handle.Position).Magnitude
+                    if distance <= CONFIG.AutoGrabDistance then
+                        humanoid:EquipTool(obj)
+                    end
+                end
+            end
+        end
+    end)
+end
+
+-- Reiniciar cuando el personaje muere/respawnea
+local function onCharacterAdded(newCharacter)
+    character = newCharacter
+    humanoid = character:WaitForChild("Humanoid")
+    rootPart = character:WaitForChild("HumanoidRootPart")
+    
+    applySpeed()
+    setupDoubleJump()
+    
+    canDoubleJump = false
+    hasDoubleJumped = false
+    jumping = false
+end
+
+-- Inicialización
+applySpeed()
+setupDoubleJump()
+setupAutoGrab()
+
+player.CharacterAdded:Connect(onCharacterAdded)
+
+-- Mensaje de confirmación
+print("✅ Script cargado correctamente")
+print("• Velocidad: " .. CONFIG.Speed)
+print("• Doble Salto: " .. (CONFIG.DoubleJumpEnabled and "Activado" or "Desactivado"))
+print("• Auto Agarre: " .. (CONFIG.AutoGrabEnabled and "Activado" or "Desactivado"))
